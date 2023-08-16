@@ -31,13 +31,13 @@ type Item struct {
 	Description string    `xml:"description"`
 	PubDate     string    `xml:"pubDate"`
 	Link        string    `xml:"link"`
-	Image       Image     `xml:"image"` // or `xml:"itunes:image"` depending on your RSS feed
+	Image       Image     `xml:"http://www.itunes.com/dtds/podcast-1.0.dtd image"`
 	Enclosure   Enclosure `xml:"enclosure"`
 }
 
 type Image struct {
-	XMLName xml.Name `xml:"image"` // or `xml:"itunes:image"` depending on your RSS feed
-	Url     string   `xml:"url,attr"`
+	XMLName xml.Name `xml:"image"`
+	Url     string   `xml:"href,attr"`
 }
 
 type Enclosure struct {
