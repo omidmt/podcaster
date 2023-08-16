@@ -18,13 +18,26 @@ type Rss struct {
 }
 
 type Channel struct {
-	XMLName xml.Name `xml:"channel"`
-	Item    []Item   `xml:"item"`
+	XMLName     xml.Name `xml:"channel"`
+	Title       string   `xml:"title"`
+	Description string   `xml:"description"`
+	Language    string   `xml:"language"`
+	Item        []Item   `xml:"item"`
 }
 
 type Item struct {
-	XMLName   xml.Name  `xml:"item"`
-	Enclosure Enclosure `xml:"enclosure"`
+	XMLName     xml.Name  `xml:"item"`
+	Title       string    `xml:"title"`
+	Description string    `xml:"description"`
+	PubDate     string    `xml:"pubDate"`
+	Link        string    `xml:"link"`
+	Image       Image     `xml:"image"` // or `xml:"itunes:image"` depending on your RSS feed
+	Enclosure   Enclosure `xml:"enclosure"`
+}
+
+type Image struct {
+	XMLName xml.Name `xml:"image"` // or `xml:"itunes:image"` depending on your RSS feed
+	Url     string   `xml:"url,attr"`
 }
 
 type Enclosure struct {
@@ -93,7 +106,28 @@ func CheckForNewEpisodes(db *DB) {
 			continue
 		}
 
-		newNum, err := db.InsertEpisodesToDB(p.Id, rss.Channel.Item)
+		// Update podcast info
+		err = db.UpdatePodcastInfo(p.Id, rss.Channel.Title, rss.Channel.Description, rss.Channel.Language)
+		if err != nil {
+			log.Sugar().Error("failed to update podcast info in database", err)
+			continue
+		}
+
+		// Convert the channel's items to episode format
+		episodes := make([]Item, len(rss.Channel.Item))
+		for i, item := range rss.Channel.Item {
+			episodes[i] = Item{
+				Title:       item.Title,
+				Description: item.Description,
+				PubDate:     item.PubDate,
+				Link:        item.Link,
+				Image:       item.Image,
+				Enclosure:   item.Enclosure,
+			}
+		}
+
+		// Insert new episodes
+		newNum, err := db.InsertEpisodesToDB(p.Id, episodes)
 		newEpisodesCount += newNum
 		if err != nil {
 			log.Sugar().Error("failed to insert episodes into database", err)

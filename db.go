@@ -6,17 +6,29 @@ import (
 )
 
 type Podcast struct {
-	Id       int
-	Text     string `xml:"text,attr"`
-	XMLUrl   string `xml:"xmlUrl,attr"`
-	HTMLUrl  string `xml:"htmlUrl,attr"`
-	ImageUrl string `xml:"imageUrl,attr"`
+	Id          int
+	UserId      int
+	Text        string `xml:"text,attr"`
+	XMLUrl      string `xml:"xmlUrl,attr"`
+	HTMLUrl     string `xml:"htmlUrl,attr"`
+	ImageUrl    string `xml:"imageUrl,attr"`
+	Title       string
+	Description string
+	Language    string
 }
 
 type Episode struct {
 	Id          int
 	PodcastName string
+	PodcastId   int
 	URL         string
+	Title       string
+	Description string
+	PubDate     time.Time
+	Link        string
+	ImageURL    string
+	FileName    string
+	Downloaded  int
 }
 
 type DB struct {
@@ -48,18 +60,21 @@ func NewDB() *DB {
 
 func InitializeDatabase(db *sql.DB) error {
 	createPodcastTableQuery := `
-	CREATE TABLE IF NOT EXISTS podcasts(
-		id INTEGER PRIMARY KEY AUTOINCREMENT,
-		user_id INTEGER,
-		name TEXT NOT NULL,
-		xml_url TEXT NOT NULL,
-		html_url TEXT,
-		image_url TEXT,
-		timestamp DATETIME DEFAULT CURRENT_TIMESTAMP,
-		UNIQUE(user_id, name),
-		FOREIGN KEY(user_id) REFERENCES users(id)
-)
-`
+		CREATE TABLE IF NOT EXISTS podcasts(
+				id INTEGER PRIMARY KEY AUTOINCREMENT,
+				user_id INTEGER,
+				name TEXT NOT NULL,
+				xml_url TEXT NOT NULL,
+				html_url TEXT,
+				image_url TEXT,
+				title TEXT,
+				description TEXT,
+				language TEXT,
+				timestamp DATETIME DEFAULT CURRENT_TIMESTAMP,
+			UNIQUE(user_id, name),
+			FOREIGN KEY(user_id) REFERENCES users(id)
+		)
+		`
 
 	_, err := db.Exec(createPodcastTableQuery)
 	if err != nil {
@@ -72,13 +87,17 @@ func InitializeDatabase(db *sql.DB) error {
 			podcast_id INTEGER,
 			url TEXT NOT NULL,
 			file_name TEXT,
+			title TEXT,
+			description TEXT,
+			pub_date DATETIME,
+			link TEXT,
+			image_url TEXT,
 			downloaded INTEGER NOT NULL DEFAULT 0,
 			timestamp DATETIME DEFAULT CURRENT_TIMESTAMP,
 			update_time DATETIME,
 			FOREIGN KEY(podcast_id) REFERENCES podcasts(id)
 		)
-	
-	`
+		`
 
 	_, err = db.Exec(createEpisodesTableQuery)
 	if err != nil {
@@ -205,10 +224,15 @@ func (db *DB) InsertEpisodesToDB(podcastId int, episodes []Item) (int, error) {
 
 		if err == sql.ErrNoRows { // Insert new episode
 			_, err = db.database.Exec(`
-				INSERT INTO episodes(podcast_id, url)
-				VALUES (?, ?)`,
+				INSERT INTO episodes(podcast_id, url, title, description, pub_date, link, image_url)
+				VALUES (?, ?, ?, ?, ?, ?, ?)`,
 				podcastId,
 				item.Enclosure.Url,
+				item.Title,
+				item.Description,
+				item.PubDate,
+				item.Link,
+				item.Image.Url,
 			)
 			if err == nil {
 				newEpisodesCount++ // Increment the counter if a new episode was inserted
@@ -231,8 +255,13 @@ func (db *DB) InsertEpisodesToDB(podcastId int, episodes []Item) (int, error) {
 
 			// Update the current episode
 			_, err = db.database.Exec(`
-				UPDATE episodes SET url = ? WHERE id = ?`,
+				UPDATE episodes SET url = ?, title = ?, description = ?, pub_date = ?, link = ?, image_url = ? WHERE id = ?`,
 				item.Enclosure.Url,
+				item.Title,
+				item.Description,
+				item.PubDate,
+				item.Link,
+				item.Image.Url,
 				existingEpisode.ID,
 			)
 		}
@@ -282,4 +311,15 @@ func (db *DB) GetNewEpisodesFromDB() ([]Episode, error) {
 	}
 
 	return episodes, nil
+}
+
+func (db *DB) UpdatePodcastInfo(podcastId int, title string, description string, language string) error {
+	_, err := db.database.Exec(`
+		UPDATE podcasts SET title = ?, description = ?, language = ? WHERE id = ?`,
+		title,
+		description,
+		language,
+		podcastId,
+	)
+	return err
 }
